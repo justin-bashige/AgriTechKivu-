@@ -79,7 +79,29 @@ function saveLocalReports(reports: ProductReport[]): void {
 // OPÉRATIONS SUR LES PRODUITS
 // ==========================================
 
+// ==========================================
+// OPÉRATIONS SUR LES PRODUITS (Sync Centralisée Cloud & Serveur)
+// ==========================================
+
 export async function fetchProducts(): Promise<Product[]> {
+  let remoteProducts: Product[] = [];
+  let fetchedFromServer = false;
+
+  // 1. Essayer de charger depuis le serveur partagé /api/products
+  try {
+    const res = await fetch('/api/products');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        remoteProducts = data;
+        fetchedFromServer = true;
+      }
+    }
+  } catch (err) {
+    console.warn('API /api/products non accessible:', err);
+  }
+
+  // 2. Si Supabase est configuré, essayer de charger ou compléter depuis Supabase
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
@@ -87,35 +109,46 @@ export async function fetchProducts(): Promise<Product[]> {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.warn('Supabase query error, falling back to local store:', error.message);
-        return getLocalProducts();
-      }
+      if (!error && Array.isArray(data)) {
+        const supaProducts: Product[] = data.map((p: any) => ({
+          id: p.id,
+          ownerId: p.owner_id || '',
+          title: p.title,
+          description: p.description || '',
+          category: p.category,
+          price: Number(p.price),
+          currency: p.currency,
+          unit: p.unit,
+          quantityAvailable: Number(p.quantity_available || 1),
+          location: p.location,
+          images: p.images || [],
+          whatsappNumber: p.whatsapp_number,
+          status: p.status,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+        }));
 
-      // Convert DB snake_case to frontend camelCase
-      return (data || []).map((p: any) => ({
-        id: p.id,
-        ownerId: p.owner_id,
-        title: p.title,
-        description: p.description || '',
-        category: p.category,
-        price: Number(p.price),
-        currency: p.currency,
-        unit: p.unit,
-        quantityAvailable: Number(p.quantity_available || 1),
-        location: p.location,
-        images: p.images || [],
-        whatsappNumber: p.whatsapp_number,
-        status: p.status,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
-      }));
+        // Fusionner sans doublons
+        const idSet = new Set(remoteProducts.map((p) => p.id));
+        for (const sp of supaProducts) {
+          if (!idSet.has(sp.id)) {
+            remoteProducts.push(sp);
+          }
+        }
+        fetchedFromServer = true;
+      }
     } catch (e) {
-      console.warn('Supabase connection failed, using local store:', e);
-      return getLocalProducts();
+      console.warn('Supabase query failed:', e);
     }
   }
 
+  // Si on a récupéré des données distantes (ou tableau vide officiel), mettre à jour le cache local
+  if (fetchedFromServer) {
+    saveLocalProducts(remoteProducts);
+    return remoteProducts;
+  }
+
+  // En cas d'absence totale de réseau, repli sur le cache local du navigateur
   return getLocalProducts();
 }
 
@@ -126,12 +159,23 @@ export async function createProduct(productData: Omit<Product, 'id' | 'createdAt
     createdAt: new Date().toISOString(),
   };
 
+  // 1. Sauvegarder sur le serveur partagé /api/products pour que TOUS les téléphones et navigateurs le voient
+  try {
+    await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProduct),
+    });
+  } catch (err) {
+    console.warn('Erreur envoi /api/products:', err);
+  }
+
+  // 2. Si Supabase est connecté, insérer également dans PostgreSQL
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
         .from('products')
         .insert({
-          owner_id: productData.ownerId,
           title: productData.title,
           description: productData.description,
           category: productData.category,
@@ -152,33 +196,41 @@ export async function createProduct(productData: Omit<Product, 'id' | 'createdAt
         newProduct.createdAt = data.created_at;
       }
     } catch (e) {
-      console.warn('Supabase insert failed, saving locally:', e);
+      console.warn('Supabase insert failed:', e);
     }
   }
 
-  // Persist locally for immediate availability and offline readiness
+  // 3. Mettre à jour le cache local
   const current = getLocalProducts();
-  saveLocalProducts([newProduct, ...current]);
+  const updated = [newProduct, ...current.filter((p) => p.id !== newProduct.id)];
+  saveLocalProducts(updated);
+
   return newProduct;
 }
 
 export async function deleteProduct(productId: string): Promise<boolean> {
+  // 1. Supprimer sur le serveur partagé
+  try {
+    await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+  } catch (e) {
+    console.warn('API delete error:', e);
+  }
+
+  // 2. Supprimer sur Supabase
   if (isSupabaseConfigured && supabase) {
     try {
-      const { error } = await supabase.from('products').delete().eq('id', productId);
-      if (error) {
-        console.warn('Supabase delete error:', error.message);
-      }
+      await supabase.from('products').delete().eq('id', productId);
     } catch (e) {
       console.warn('Supabase delete failed:', e);
     }
   }
 
+  // 3. Supprimer du cache local
   const current = getLocalProducts();
   const filtered = current.filter((p) => p.id !== productId);
   saveLocalProducts(filtered);
 
-  // Also clean up any reports linked to this product
+  // Nettoyer les signalements associés
   const reports = getLocalReports();
   saveLocalReports(reports.filter((r) => r.productId !== productId));
 
@@ -197,6 +249,18 @@ export async function createReport(reportData: Omit<ProductReport, 'id' | 'creat
     createdAt: new Date().toISOString(),
   };
 
+  // 1. Sauvegarder sur le serveur partagé
+  try {
+    await fetch('/api/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newReport),
+    });
+  } catch (err) {
+    console.warn('API report post failed:', err);
+  }
+
+  // 2. Si Supabase est connecté
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from('reports').insert({
@@ -217,6 +281,21 @@ export async function createReport(reportData: Omit<ProductReport, 'id' | 'creat
 }
 
 export async function fetchReports(): Promise<ProductReport[]> {
+  // 1. Essayer de charger depuis le serveur
+  try {
+    const res = await fetch('/api/reports');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        saveLocalReports(data);
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('API reports fetch failed:', err);
+  }
+
+  // 2. Si Supabase est connecté
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
@@ -225,7 +304,7 @@ export async function fetchReports(): Promise<ProductReport[]> {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        return data.map((r: any) => ({
+        const supaReports = data.map((r: any) => ({
           id: r.id,
           productId: r.product_id,
           productTitle: r.products?.title || 'Produit',
@@ -236,6 +315,8 @@ export async function fetchReports(): Promise<ProductReport[]> {
           adminNotes: r.admin_notes,
           createdAt: r.created_at,
         }));
+        saveLocalReports(supaReports);
+        return supaReports;
       }
     } catch (e) {
       console.warn('Supabase fetch reports failed:', e);
@@ -246,6 +327,18 @@ export async function fetchReports(): Promise<ProductReport[]> {
 }
 
 export async function updateReportStatus(reportId: string, status: ReportStatus, adminNotes?: string): Promise<boolean> {
+  // 1. Mettre à jour sur le serveur
+  try {
+    await fetch(`/api/reports/${reportId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, adminNotes }),
+    });
+  } catch (err) {
+    console.warn('API update report failed:', err);
+  }
+
+  // 2. Si Supabase est connecté
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase

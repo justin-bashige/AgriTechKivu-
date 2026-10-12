@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 
+import fs from 'fs';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,6 +13,37 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+// Ensure data directory exists
+const DATA_DIR = path.resolve(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+const REPORTS_FILE = path.join(DATA_DIR, 'reports.json');
+
+function readJsonFile<T>(filePath: string, fallback: T): T {
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify(fallback, null, 2));
+      return fallback;
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(content);
+  } catch (e) {
+    console.error(`Error reading ${filePath}:`, e);
+    return fallback;
+  }
+}
+
+function writeJsonFile<T>(filePath: string, data: T): void {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error(`Error writing ${filePath}:`, e);
+  }
+}
 
 // Middleware for parsing JSON with generous limit for base64 plant photos
 app.use(express.json({ limit: '25mb' }));
@@ -37,6 +70,63 @@ app.get('/api/health', (_req, res) => {
     hasGeminiKey: !!geminiApiKey,
     timestamp: new Date().toISOString(),
   });
+});
+
+// Products Shared API (Global persistence for all devices & browsers)
+app.get('/api/products', (_req, res) => {
+  const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
+  res.json(products);
+});
+
+app.post('/api/products', (req, res) => {
+  const newProduct = req.body;
+  if (!newProduct || !newProduct.title || !newProduct.whatsappNumber) {
+    return res.status(400).json({ error: 'Produit invalide (titre et numéro WhatsApp requis).' });
+  }
+
+  const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
+  // Insert at top
+  const updated = [newProduct, ...products.filter((p) => p.id !== newProduct.id)];
+  writeJsonFile(PRODUCTS_FILE, updated);
+  res.status(201).json(newProduct);
+});
+
+app.delete('/api/products/:id', (req, res) => {
+  const { id } = req.params;
+  const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
+  const filtered = products.filter((p) => p.id !== id);
+  writeJsonFile(PRODUCTS_FILE, filtered);
+
+  // Also remove linked reports
+  const reports = readJsonFile<any[]>(REPORTS_FILE, []);
+  writeJsonFile(REPORTS_FILE, reports.filter((r) => r.productId !== id));
+
+  res.json({ success: true });
+});
+
+// Reports Shared API
+app.get('/api/reports', (_req, res) => {
+  const reports = readJsonFile<any[]>(REPORTS_FILE, []);
+  res.json(reports);
+});
+
+app.post('/api/reports', (req, res) => {
+  const newReport = req.body;
+  const reports = readJsonFile<any[]>(REPORTS_FILE, []);
+  const updated = [newReport, ...reports];
+  writeJsonFile(REPORTS_FILE, updated);
+  res.status(201).json(newReport);
+});
+
+app.put('/api/reports/:id', (req, res) => {
+  const { id } = req.params;
+  const { status, adminNotes } = req.body;
+  const reports = readJsonFile<any[]>(REPORTS_FILE, []);
+  const updated = reports.map((r) =>
+    r.id === id ? { ...r, status: status || r.status, adminNotes: adminNotes ?? r.adminNotes } : r
+  );
+  writeJsonFile(REPORTS_FILE, updated);
+  res.json({ success: true });
 });
 
 // Admin bootstrap code verification endpoint
