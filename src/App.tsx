@@ -22,6 +22,7 @@ import {
   setCurrentUser,
 } from './lib/supabase';
 import { fetchAgriculturalWeather, KIVU_TERRITORIES, TerritoryCoordinates } from './services/weather';
+import { normalizeWhatsAppNumber } from './lib/whatsapp';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -147,9 +148,14 @@ export default function App() {
     loadWeather(territory);
   };
 
-  // Products belonging to current user
+  // Products belonging to current user (matched by account ID or phone number)
   const userProducts = currentUser
-    ? products.filter((p) => p.ownerId === currentUser.id)
+    ? products.filter(
+        (p) =>
+          (p.ownerId && p.ownerId === currentUser.id) ||
+          (currentUser.phone &&
+            normalizeWhatsAppNumber(p.whatsappNumber) === normalizeWhatsAppNumber(currentUser.phone))
+      )
     : [];
 
   const unreadReportsCount = reports.filter((r) => r.status === 'pending').length;

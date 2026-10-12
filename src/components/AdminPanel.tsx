@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Trash2, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter, Search, X } from 'lucide-react';
+import { ShieldCheck, Trash2, MessageSquare, AlertTriangle, CheckCircle2, Clock, Filter, Search, X, Sparkles, RefreshCw } from 'lucide-react';
 import { Product, ProductReport, ReportStatus, UserProfile } from '../types';
 import { buildAdminWhatsAppLink } from '../lib/whatsapp';
+import { cleanDuplicateProducts } from '../lib/supabase';
 
 interface AdminPanelProps {
   products: Product[];
@@ -57,6 +58,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setTimeout(() => setFeedback(null), 4000);
     } catch (e: any) {
       alert(e.message || 'Erreur lors de la mise à jour.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCleanDuplicates = async () => {
+    setIsProcessing(true);
+    try {
+      const count = await cleanDuplicateProducts();
+      window.dispatchEvent(new Event('agritech:products-updated'));
+      setFeedback(
+        count > 0
+          ? `${count} doublon(s) supprimé(s) avec succès de la base de données.`
+          : 'Aucun doublon trouvé : la base de données est déjà parfaitement propre.'
+      );
+      setTimeout(() => setFeedback(null), 5000);
+    } catch (e: any) {
+      alert(e.message || 'Erreur lors du nettoyage des doublons.');
     } finally {
       setIsProcessing(false);
     }
@@ -252,6 +271,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* Products View */}
       {activeTab === 'products' && (
         <div className="space-y-3">
+          <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5">
+            <span className="text-xs font-semibold text-stone-700">
+              {products.length} produit{products.length > 1 ? 's' : ''} en ligne
+            </span>
+            <button
+              onClick={handleCleanDuplicates}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs transition"
+              title="Détecte et supprime automatiquement tout doublon de produit"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Nettoyer les doublons</span>
+            </button>
+          </div>
+
           {products.length === 0 ? (
             <div className="bg-white border border-stone-200 rounded-2xl p-8 text-center text-xs text-stone-500">
               Aucun produit sur le marché.

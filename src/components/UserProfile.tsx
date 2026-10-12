@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { User, Phone, ShieldCheck, LogOut, Package, Database, Key, CheckCircle2, AlertCircle, Trash2, ShieldAlert, Sparkles, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Phone, ShieldCheck, LogOut, Package, Database, Key, CheckCircle2, AlertCircle, Trash2, ShieldAlert, Sparkles, ArrowRight, Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 import { UserProfile, Product } from '../types';
-import { isSupabaseConfigured, setCustomSupabaseCredentials, supabaseUrl } from '../lib/supabase';
+import { isSupabaseConfigured, setCustomSupabaseCredentials, supabaseUrl, checkSupabaseDatabaseStatus, SUPABASE_SCHEMA_SQL } from '../lib/supabase';
 import { isValidWhatsAppNumber, normalizeWhatsAppNumber } from '../lib/whatsapp';
 
 interface UserProfileProps {
@@ -43,8 +43,41 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
   const [supabaseInputUrl, setSupabaseInputUrl] = useState('');
   const [supabaseInputKey, setSupabaseInputKey] = useState('');
 
-  // Supabase Schema Copy state
+  // Supabase Schema Copy & Health state
   const [copiedSchema, setCopiedSchema] = useState(false);
+  const [dbHealth, setDbHealth] = useState<{
+    loading: boolean;
+    tablesExist: boolean | null;
+    errorMsg?: string;
+  }>({ loading: false, tablesExist: null });
+
+  const runDbHealthCheck = async () => {
+    setDbHealth({ loading: true, tablesExist: null });
+    const res = await checkSupabaseDatabaseStatus();
+    setDbHealth({
+      loading: false,
+      tablesExist: res.tablesExist,
+      errorMsg: res.errorMessage,
+    });
+  };
+
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      runDbHealthCheck();
+    }
+  }, []);
+
+  const handleCopySchema = () => {
+    navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL);
+    setCopiedSchema(true);
+    setTimeout(() => setCopiedSchema(false), 3000);
+  };
+
+  const projectIdMatch = supabaseUrl.match(/https:\/\/([a-zA-Z0-9]+)\.supabase\.co/);
+  const supabaseProjectId = projectIdMatch ? projectIdMatch[1] : '';
+  const sqlEditorUrl = supabaseProjectId
+    ? `https://supabase.com/dashboard/project/${supabaseProjectId}/sql/new`
+    : 'https://supabase.com/dashboard';
 
   const handleSaveSupabaseConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,15 +205,6 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
     } finally {
       setAdminLoading(false);
     }
-  };
-
-  const handleCopySchema = () => {
-    const schemaSql = `-- Voir le fichier complet /supabase/schema.sql dans le projet
--- Tables créées : profiles, products, reports, crop_diagnoses, agricultural_contents
--- avec RLS et politiques de sécurité.`;
-    navigator.clipboard.writeText(schemaSql);
-    setCopiedSchema(true);
-    setTimeout(() => setCopiedSchema(false), 3000);
   };
 
   return (
@@ -337,30 +361,151 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
           </div>
 
           {/* Supabase Technical Integration Status */}
-          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-xs text-stone-700 space-y-2">
+          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 text-xs text-stone-700 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 font-bold text-stone-900">
+              <div className="flex items-center gap-2 font-bold text-stone-900">
                 <Database className="w-4 h-4 text-emerald-700" />
-                <span>État Backend Supabase</span>
+                <span className="text-sm">État Base de Données Supabase</span>
               </div>
               <span
-                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  isSupabaseConfigured
-                    ? 'bg-emerald-100 text-emerald-800'
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                  dbHealth.tablesExist
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : isSupabaseConfigured
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
                     : 'bg-stone-200 text-stone-700'
                 }`}
               >
-                {isSupabaseConfigured ? 'Connecté en ligne' : 'Mode local'}
+                {dbHealth.tablesExist
+                  ? 'Connecté & Tables Actives'
+                  : isSupabaseConfigured
+                  ? 'Clés détectées (Tables à créer)'
+                  : 'Mode local temporaire'}
               </span>
             </div>
-            <p className="leading-relaxed text-[11px] text-stone-600">
-              {isSupabaseConfigured
-                ? `Connecté au projet Supabase : ${supabaseUrl}`
-                : 'Les données sont sauvegardées localement. Vous pouvez relier votre projet Supabase en ligne directement ci-dessous.'}
-            </p>
 
-            {!isSupabaseConfigured && (
+            {isSupabaseConfigured ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-white rounded-xl border border-stone-200 space-y-1.5">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-stone-500 font-medium">Projet lié :</span>
+                    <span className="font-mono text-stone-800 font-bold truncate max-w-[200px]">{supabaseUrl}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-stone-500 font-medium">Statut des tables :</span>
+                    {dbHealth.loading ? (
+                      <span className="text-stone-400 flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin" /> Vérification...
+                      </span>
+                    ) : dbHealth.tablesExist ? (
+                      <span className="text-emerald-700 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Tables PostgreSQL prêtes
+                      </span>
+                    ) : (
+                      <span className="text-amber-800 font-bold flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" /> Table 'products' non créée
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Si les clés sont là mais les tables n'existent pas encore dans Supabase */}
+                {!dbHealth.tablesExist && !dbHealth.loading && (
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-3 text-amber-950">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-bold text-xs text-amber-900">
+                          Pourquoi votre ami ne voit rien sur le marché ?
+                        </h4>
+                        <p className="text-[11px] text-amber-800 leading-relaxed mt-1">
+                          Vos clés Supabase sont bien configurées dans les Secrets, mais vous n'avez pas encore exécuté le script SQL dans votre projet Supabase. 
+                          Tant que la table <code>products</code> n'est pas créée, les annonces sont stockées uniquement dans la mémoire de votre propre navigateur et ne peuvent pas être transmises aux autres téléphones.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-amber-200/60 space-y-2">
+                      <p className="font-bold text-[11px] text-amber-900">
+                        Activation en 3 étapes simples (1 minute) :
+                      </p>
+                      <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-amber-800">
+                        <li>Cliquez sur <strong>Copier le script SQL</strong> ci-dessous.</li>
+                        <li>Ouvrez l'éditeur SQL de votre projet Supabase.</li>
+                        <li>Collez le texte et cliquez sur <strong>Run</strong>.</li>
+                      </ol>
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleCopySchema}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs"
+                        >
+                          {copiedSchema ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedSchema ? 'Script Copié !' : 'Copier le Script SQL'}</span>
+                        </button>
+
+                        <a
+                          href={sqlEditorUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-stone-300 hover:bg-stone-50 text-stone-800 font-semibold text-xs transition shadow-xs"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Ouvrir l'éditeur SQL Supabase</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={runDbHealthCheck}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100/50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Re-tester la connexion</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Si tout est déjà vert */}
+                {dbHealth.tablesExist && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-emerald-900">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <p className="text-xs font-medium">
+                        La base de données est synchronisée en temps réel pour tous les utilisateurs.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={runDbHealthCheck}
+                      className="p-1 rounded hover:bg-emerald-100 text-emerald-700"
+                      title="Actualiser le test"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-stone-200 text-[11px] text-stone-500 space-y-1">
+                  <p className="font-semibold text-stone-700">Pour votre déploiement Vercel (agritechkivu.vercel.app) :</p>
+                  <p>
+                    Les Secrets saisis dans Google AI Studio ne sont pas automatiquement envoyés à Vercel. 
+                    Sur Vercel, allez dans <strong>Settings &gt; Environment Variables</strong> et ajoutez :
+                  </p>
+                  <ul className="list-disc list-inside space-y-0.5 font-mono text-[10px] text-stone-700">
+                    <li>VITE_SUPABASE_URL</li>
+                    <li>VITE_SUPABASE_ANON_KEY</li>
+                    <li>GEMINI_API_KEY (nécessaire pour le diagnostic IA)</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
               <div className="pt-1">
+                <p className="text-[11px] text-stone-600 mb-2">
+                  Les données sont sauvegardées localement. Vous pouvez relier votre projet Supabase en ligne directement ci-dessous.
+                </p>
                 {!showSupabaseForm ? (
                   <button
                     onClick={() => setShowSupabaseForm(true)}

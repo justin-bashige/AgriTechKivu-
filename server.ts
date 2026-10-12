@@ -85,8 +85,21 @@ app.post('/api/products', (req, res) => {
   }
 
   const products = readJsonFile<any[]>(PRODUCTS_FILE, []);
-  // Insert at top
-  const updated = [newProduct, ...products.filter((p) => p.id !== newProduct.id)];
+  const normPhone = (newProduct.whatsappNumber || '').replace(/\D/g, '');
+  const normTitle = (newProduct.title || '').trim().toLowerCase();
+
+  // Deduplicate: filter out any existing item with same id OR same business signature
+  const filtered = products.filter((p) => {
+    if (p.id === newProduct.id) return false;
+    const pPhone = (p.whatsappNumber || '').replace(/\D/g, '');
+    const pTitle = (p.title || '').trim().toLowerCase();
+    if (pPhone === normPhone && pTitle === normTitle && Number(p.price) === Number(newProduct.price)) {
+      return false; // remove duplicate
+    }
+    return true;
+  });
+
+  const updated = [newProduct, ...filtered];
   writeJsonFile(PRODUCTS_FILE, updated);
   res.status(201).json(newProduct);
 });

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Search, Plus, Filter, MapPin, AlertCircle, ShoppingBag, X, MessageSquare, ShieldAlert, Trash2, CheckCircle2, Camera, Phone } from 'lucide-react';
 import { Product, ProductCategory, Currency, ProductUnit, UserProfile, ReportReason } from '../types';
 import { buildBuyerWhatsAppLink, buildAdminWhatsAppLink, isValidWhatsAppNumber, normalizeWhatsAppNumber } from '../lib/whatsapp';
 import { KIVU_TERRITORIES } from '../services/weather';
+import { getLastSupabaseError, deduplicateProducts } from '../lib/supabase';
 
 interface MarketplaceProps {
   products: Product[];
@@ -82,9 +83,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [reportReason, setReportReason] = useState<ReportReason>('Produit frauduleux');
   const [reportDetails, setReportDetails] = useState('');
 
-  // Filtered products list
+  // Verrou anti-double-clic
+  const isSubmittingRef = useRef(false);
+
+  // Filtered products list (nettoyée automatiquement de tout doublon)
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    const cleanList = deduplicateProducts(products);
+    return cleanList.filter((p) => {
       if (p.status !== 'active') return false;
 
       const matchesSearch =
@@ -160,6 +165,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
     const cleanWhatsApp = normalizeWhatsAppNumber(rawNumber);
 
+    if (isSubmittingRef.current || actionLoading) return;
+    isSubmittingRef.current = true;
     setActionLoading(true);
     try {
       await onPublishProduct({
@@ -184,12 +191,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       setFormDescription('');
       setFormImages([]);
       setIsPublishModalOpen(false);
-      setActionSuccess('Votre produit a été publié avec succès sur le marché !');
-      setTimeout(() => setActionSuccess(null), 4000);
+
+      const dbErr = getLastSupabaseError();
+      if (dbErr && dbErr.includes('public.products')) {
+        setActionSuccess(
+          'Produit enregistré localement sur votre appareil. ⚠️ Attention : Les tables Supabase n\'ont pas encore été créées (voir profil). Vos amis ne le verront que lorsque le script SQL sera exécuté.'
+        );
+        setTimeout(() => setActionSuccess(null), 8000);
+      } else {
+        setActionSuccess('Votre produit a été publié avec succès sur le marché !');
+        setTimeout(() => setActionSuccess(null), 4000);
+      }
     } catch (err: any) {
       setActionError(err.message || 'Erreur lors de la publication du produit.');
     } finally {
       setActionLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -240,7 +257,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   };
 
   const isAdmin = currentUser?.role === 'admin';
-  const isOwner = selectedProduct && currentUser && selectedProduct.ownerId === currentUser.id;
+  const isOwner = Boolean(
+    selectedProduct && (
+      (currentUser?.id && selectedProduct.ownerId && selectedProduct.ownerId === currentUser.id) ||
+      (currentUser?.phone &&
+        normalizeWhatsAppNumber(selectedProduct.whatsappNumber) === normalizeWhatsAppNumber(currentUser.phone))
+    )
+  );
 
   return (
     <div className="space-y-4 pb-24 md:pb-8">
