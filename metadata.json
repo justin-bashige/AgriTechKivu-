@@ -1,0 +1,8 @@
+{
+  "name": "AgriTech Kivu",
+  "description": "Application agricole moderne pour le Sud-Kivu et la RDC : diagnostic de cultures par IA, météo agricole, marché en direct et formations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
