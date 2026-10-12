@@ -1,9 +1,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Product, ProductReport, UserProfile, ReportStatus } from '../types';
 
-// Extraction sécurisée des variables publiques Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Extraction sécurisée des variables publiques Supabase (env vars ou stockage local)
+const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const envSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const localCustomUrl = typeof window !== 'undefined' ? localStorage.getItem('agritech_custom_supabase_url') : null;
+const localCustomKey = typeof window !== 'undefined' ? localStorage.getItem('agritech_custom_supabase_anon_key') : null;
+
+export const supabaseUrl = envSupabaseUrl || localCustomUrl || '';
+export const supabaseAnonKey = envSupabaseAnonKey || localCustomKey || '';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
@@ -15,6 +21,16 @@ export const isSupabaseConfigured = Boolean(
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
+
+export function setCustomSupabaseCredentials(url: string, anonKey: string): void {
+  try {
+    localStorage.setItem('agritech_custom_supabase_url', url.trim());
+    localStorage.setItem('agritech_custom_supabase_anon_key', anonKey.trim());
+    window.location.reload();
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 // Clés de persistance locale lorsque Supabase n'est pas encore lié
 const LOCAL_STORAGE_PRODUCTS_KEY = 'agritech_kivu_products_db';

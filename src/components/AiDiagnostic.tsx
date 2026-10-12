@@ -82,10 +82,21 @@ export const AiDiagnostic: React.FC<AiDiagnosticProps> = ({ onGoToMarket }) => {
         }),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (response.status === 404 || rawText.includes('The page') || rawText.includes('<!doctype') || rawText.includes('<html')) {
+          throw new Error(
+            'L\'API de diagnostic (/api/diagnose) n\'est pas encore disponible sur votre déploiement Vercel (404 Not Found). Assurez-vous que les Serverless Functions du dossier /api et la variable d\'environnement GEMINI_API_KEY sont configurées dans les paramètres de votre projet Vercel.'
+          );
+        }
+        throw new Error('Réponse inattendue reçue du serveur.');
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erreur lors de la communication avec le serveur de diagnostic.');
+        throw new Error(data?.error || 'Erreur lors de la communication avec le serveur de diagnostic.');
       }
 
       setResult(data as DiagnosisResult);
