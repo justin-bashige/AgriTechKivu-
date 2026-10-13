@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, ScanSearch, ShoppingBag, GraduationCap, User, CloudSun, BookOpen, ShieldAlert, Bell } from 'lucide-react';
+import { Home, ScanSearch, ShoppingBag, GraduationCap, User, CloudSun, ShieldAlert, Bell } from 'lucide-react';
 import { AgriTechLogo } from './AgriTechLogo';
 import { UserProfile } from '../types';
 
@@ -21,6 +21,8 @@ interface NavigationProps {
   unreadReportsCount?: number;
   unreadNotificationsCount?: number;
   onOpenNotifications: () => void;
+  onOpenProfile: () => void;
+  onLogout?: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -30,6 +32,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   unreadReportsCount = 0,
   unreadNotificationsCount = 0,
   onOpenNotifications,
+  onOpenProfile,
+  onLogout,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
 
@@ -146,7 +150,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               )}
             </nav>
 
-            {/* Notifications Action in Header */}
+            {/* Notifications & Profile Action in Header */}
             <div className="flex items-center gap-2">
               <button
                 onClick={onOpenNotifications}
@@ -160,12 +164,31 @@ export const Navigation: React.FC<NavigationProps> = ({
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-600"></span>
                 )}
               </button>
+
+              {/* Profile Icon in Header (SEULEMENT POUR LA VERSION PC) */}
+              <button
+                onClick={onOpenProfile}
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border border-stone-200 hover:border-emerald-600/50 hover:bg-stone-50 transition text-stone-700 relative group cursor-pointer shadow-2xs"
+                title={currentUser ? `Mon Profil : ${currentUser.fullName}` : "Se connecter / Profil"}
+              >
+                <div className="w-7 h-7 rounded-full bg-emerald-100 text-[#15803d] flex items-center justify-center font-bold text-xs ring-1 ring-emerald-200">
+                  {currentUser ? currentUser.fullName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-stone-900 leading-tight max-w-[110px] truncate">
+                    {currentUser ? currentUser.fullName : 'Mon Profil'}
+                  </p>
+                  <p className="text-[10px] text-stone-500 leading-none">
+                    {currentUser ? (isAdmin ? 'Administrateur' : 'Agriculteur') : 'Connexion'}
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Mobile Fixed Bottom Navigation Bar (Matches Mockup Exactly) */}
+      {/* Mobile Fixed Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-stone-200 shadow-lg pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-5 h-16 max-w-lg mx-auto">
           {/* 1. Accueil */}
@@ -220,20 +243,17 @@ export const Navigation: React.FC<NavigationProps> = ({
             <span className="text-[11px] leading-tight">Formation</span>
           </button>
 
-          {/* 5. Compte / Profil */}
+          {/* 5. Profil / Compte */}
           <button
             onClick={() => onSelectTab('profile')}
-            className={`flex flex-col items-center justify-center py-1 transition-colors relative ${
-              activeTab === 'profile' || activeTab === 'admin'
+            className={`flex flex-col items-center justify-center py-1 transition-colors ${
+              activeTab === 'profile'
                 ? 'text-[#15803d] font-semibold'
                 : 'text-stone-500 hover:text-stone-800'
             }`}
           >
             <User className="w-5 h-5 mb-0.5" />
             <span className="text-[11px] leading-tight">Compte</span>
-            {isAdmin && (
-              <span className="absolute top-2 right-4 w-2 h-2 rounded-full bg-amber-500"></span>
-            )}
           </button>
         </div>
       </nav>

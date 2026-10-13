@@ -10,6 +10,7 @@ import { FinancialServices } from './components/FinancialServices';
 import { AdminPanel } from './components/AdminPanel';
 import { UserProfileView } from './components/UserProfile';
 import { NotificationsPopup } from './components/NotificationsPopup';
+import { ProfilePopup } from './components/ProfilePopup';
 import { Product, ProductReport, UserProfile, WeatherData, ReportReason, ReportStatus } from './types';
 import {
   fetchProducts,
@@ -36,10 +37,11 @@ export default function App() {
   const [weatherLoading, setWeatherLoading] = useState<boolean>(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
 
-  // Modals state for Marketplace & Notifications
+  // Modals state for Marketplace, Notifications & Profile
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
 
   // Load products
   const loadProducts = useCallback(async () => {
@@ -182,6 +184,8 @@ export default function App() {
         unreadReportsCount={unreadReportsCount}
         unreadNotificationsCount={unreadNotificationsCount}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Notifications Pop-up */}
@@ -194,6 +198,21 @@ export default function App() {
           setActiveTab('marketplace');
         }}
         onGoToMarket={() => setActiveTab('marketplace')}
+      />
+
+      {/* Profile Pop-up (Accessible via PC Header Profile Icon or Mobile Login Button) */}
+      <ProfilePopup
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        currentUser={currentUser}
+        userProducts={userProducts}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        onDeleteProduct={handleDeleteProduct}
+        onOpenMarketplace={() => {
+          setIsPublishModalOpen(true);
+          setActiveTab('marketplace');
+        }}
       />
 
       {/* Main Content Area */}
@@ -233,7 +252,7 @@ export default function App() {
             onPublishProduct={handlePublishProduct}
             onDeleteProduct={handleDeleteProduct}
             onSubmitReport={handleReportProduct}
-            onOpenAuth={() => setActiveTab('profile')}
+            onOpenAuth={() => setIsProfileOpen(true)}
             isPublishModalOpen={isPublishModalOpen}
             setIsPublishModalOpen={setIsPublishModalOpen}
             selectedProduct={selectedProduct}

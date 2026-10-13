@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { User, Phone, ShieldCheck, LogOut, Package, Database, Key, CheckCircle2, AlertCircle, Trash2, ShieldAlert, Sparkles, ArrowRight, Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, Phone, ShieldCheck, LogOut, Package, CheckCircle2, AlertCircle, Trash2, MapPin } from 'lucide-react';
 import { UserProfile, Product } from '../types';
-import { isSupabaseConfigured, setCustomSupabaseCredentials, supabaseUrl, checkSupabaseDatabaseStatus, SUPABASE_SCHEMA_SQL } from '../lib/supabase';
 import { isValidWhatsAppNumber, normalizeWhatsAppNumber } from '../lib/whatsapp';
 
 interface UserProfileProps {
@@ -37,53 +36,6 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
   const [showAdminInput, setShowAdminInput] = useState(false);
-
-  // Supabase Custom Config State
-  const [showSupabaseForm, setShowSupabaseForm] = useState(false);
-  const [supabaseInputUrl, setSupabaseInputUrl] = useState('');
-  const [supabaseInputKey, setSupabaseInputKey] = useState('');
-
-  // Supabase Schema Copy & Health state
-  const [copiedSchema, setCopiedSchema] = useState(false);
-  const [dbHealth, setDbHealth] = useState<{
-    loading: boolean;
-    tablesExist: boolean | null;
-    errorMsg?: string;
-  }>({ loading: false, tablesExist: null });
-
-  const runDbHealthCheck = async () => {
-    setDbHealth({ loading: true, tablesExist: null });
-    const res = await checkSupabaseDatabaseStatus();
-    setDbHealth({
-      loading: false,
-      tablesExist: res.tablesExist,
-      errorMsg: res.errorMessage,
-    });
-  };
-
-  useEffect(() => {
-    if (isSupabaseConfigured) {
-      runDbHealthCheck();
-    }
-  }, []);
-
-  const handleCopySchema = () => {
-    navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL);
-    setCopiedSchema(true);
-    setTimeout(() => setCopiedSchema(false), 3000);
-  };
-
-  const projectIdMatch = supabaseUrl.match(/https:\/\/([a-zA-Z0-9]+)\.supabase\.co/);
-  const supabaseProjectId = projectIdMatch ? projectIdMatch[1] : '';
-  const sqlEditorUrl = supabaseProjectId
-    ? `https://supabase.com/dashboard/project/${supabaseProjectId}/sql/new`
-    : 'https://supabase.com/dashboard';
-
-  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supabaseInputUrl.trim() || !supabaseInputKey.trim()) return;
-    setCustomSupabaseCredentials(supabaseInputUrl, supabaseInputKey);
-  };
 
   // Handle Sign In / Sign Up
   const handleAuthSubmit = (e: React.FormEvent) => {
@@ -223,40 +175,50 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
         /* Logged In View */
         <div className="space-y-5">
           {/* Profile Card */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-[#15803d] flex items-center justify-center font-bold text-lg">
-                  {currentUser.fullName.charAt(0).toUpperCase()}
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-amber-600" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-[#15803d] ring-4 ring-emerald-50 flex items-center justify-center font-bold text-xl shadow-xs">
+                    {currentUser.fullName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" title="Connecté" />
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-stone-900">
-                    {currentUser.fullName}
-                  </h2>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-stone-500">
-                      WhatsApp : +{currentUser.whatsappNumber}
-                    </span>
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-bold text-stone-900 leading-tight">
+                      {currentUser.fullName}
+                    </h2>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-flex items-center gap-1 ${
                         currentUser.role === 'admin'
                           ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                          : 'bg-emerald-50 text-emerald-800'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                       }`}
                     >
-                      {currentUser.role === 'admin' ? 'Administrateur' : 'Agriculteur / Vendeur'}
+                      <CheckCircle2 className="w-3 h-3" />
+                      {currentUser.role === 'admin' ? 'Administrateur Kivu' : 'Agriculteur / Vendeur Kivu'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-stone-600">
+                    <span className="flex items-center gap-1 font-mono text-stone-700 font-medium">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      +{currentUser.whatsappNumber}
+                    </span>
+                    <span className="text-stone-300">·</span>
+                    <span className="flex items-center gap-1 text-stone-500">
+                      <MapPin className="w-3.5 h-3.5 text-stone-400" />
+                      Kivu, RDC
+                    </span>
+                    <span className="text-stone-300">·</span>
+                    <span className="flex items-center gap-1 text-stone-500">
+                      <Package className="w-3.5 h-3.5 text-stone-400" />
+                      {userProducts.length} {userProducts.length > 1 ? 'annonces actives' : 'annonce active'}
                     </span>
                   </div>
                 </div>
               </div>
-
-              <button
-                onClick={onLogout}
-                className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-50 rounded-lg transition"
-                title="Se déconnecter"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
             </div>
           </div>
 
@@ -291,7 +253,7 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
             ) : showAdminInput ? (
               <form onSubmit={handleClaimAdmin} className="space-y-2 pt-2 border-t border-stone-100">
                 <p className="text-xs text-stone-600">
-                  Entrez le code d'accès administrateur vérifié côté serveur :
+                  Entrez le code d'accès administrateur :
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -360,206 +322,19 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
             )}
           </div>
 
-          {/* Supabase Technical Integration Status */}
-          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 text-xs text-stone-700 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-stone-900">
-                <Database className="w-4 h-4 text-emerald-700" />
-                <span className="text-sm">État Base de Données Supabase</span>
-              </div>
-              <span
-                className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                  dbHealth.tablesExist
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : isSupabaseConfigured
-                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                    : 'bg-stone-200 text-stone-700'
-                }`}
-              >
-                {dbHealth.tablesExist
-                  ? 'Connecté & Tables Actives'
-                  : isSupabaseConfigured
-                  ? 'Clés détectées (Tables à créer)'
-                  : 'Mode local temporaire'}
-              </span>
+          {/* Session & Déconnexion */}
+          <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-stone-900">Session & Déconnexion</h3>
+              <p className="text-xs text-stone-500">Fermer votre session sur cet appareil</p>
             </div>
-
-            {isSupabaseConfigured ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-white rounded-xl border border-stone-200 space-y-1.5">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-stone-500 font-medium">Projet lié :</span>
-                    <span className="font-mono text-stone-800 font-bold truncate max-w-[200px]">{supabaseUrl}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-stone-500 font-medium">Statut des tables :</span>
-                    {dbHealth.loading ? (
-                      <span className="text-stone-400 flex items-center gap-1">
-                        <RefreshCw className="w-3 h-3 animate-spin" /> Vérification...
-                      </span>
-                    ) : dbHealth.tablesExist ? (
-                      <span className="text-emerald-700 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Tables PostgreSQL prêtes
-                      </span>
-                    ) : (
-                      <span className="text-amber-800 font-bold flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" /> Table 'products' non créée
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Si les clés sont là mais les tables n'existent pas encore dans Supabase */}
-                {!dbHealth.tablesExist && !dbHealth.loading && (
-                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-3 text-amber-950">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="font-bold text-xs text-amber-900">
-                          Pourquoi votre ami ne voit rien sur le marché ?
-                        </h4>
-                        <p className="text-[11px] text-amber-800 leading-relaxed mt-1">
-                          Vos clés Supabase sont bien configurées dans les Secrets, mais vous n'avez pas encore exécuté le script SQL dans votre projet Supabase. 
-                          Tant que la table <code>products</code> n'est pas créée, les annonces sont stockées uniquement dans la mémoire de votre propre navigateur et ne peuvent pas être transmises aux autres téléphones.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-amber-200/60 space-y-2">
-                      <p className="font-bold text-[11px] text-amber-900">
-                        Activation en 3 étapes simples (1 minute) :
-                      </p>
-                      <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-amber-800">
-                        <li>Cliquez sur <strong>Copier le script SQL</strong> ci-dessous.</li>
-                        <li>Ouvrez l'éditeur SQL de votre projet Supabase.</li>
-                        <li>Collez le texte et cliquez sur <strong>Run</strong>.</li>
-                      </ol>
-
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={handleCopySchema}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs"
-                        >
-                          {copiedSchema ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedSchema ? 'Script Copié !' : 'Copier le Script SQL'}</span>
-                        </button>
-
-                        <a
-                          href={sqlEditorUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-stone-300 hover:bg-stone-50 text-stone-800 font-semibold text-xs transition shadow-xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 text-stone-500" />
-                          <span>Ouvrir l'éditeur SQL Supabase</span>
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={runDbHealthCheck}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-100/50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Re-tester la connexion</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Si tout est déjà vert */}
-                {dbHealth.tablesExist && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-emerald-900">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <p className="text-xs font-medium">
-                        La base de données est synchronisée en temps réel pour tous les utilisateurs.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={runDbHealthCheck}
-                      className="p-1 rounded hover:bg-emerald-100 text-emerald-700"
-                      title="Actualiser le test"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-stone-200 text-[11px] text-stone-500 space-y-1">
-                  <p className="font-semibold text-stone-700">Pour votre déploiement Vercel (agritechkivu.vercel.app) :</p>
-                  <p>
-                    Les Secrets saisis dans Google AI Studio ne sont pas automatiquement envoyés à Vercel. 
-                    Sur Vercel, allez dans <strong>Settings &gt; Environment Variables</strong> et ajoutez :
-                  </p>
-                  <ul className="list-disc list-inside space-y-0.5 font-mono text-[10px] text-stone-700">
-                    <li>VITE_SUPABASE_URL</li>
-                    <li>VITE_SUPABASE_ANON_KEY</li>
-                    <li>GEMINI_API_KEY (nécessaire pour le diagnostic IA)</li>
-                  </ul>
-                </div>
-              </div>
-            ) : (
-              <div className="pt-1">
-                <p className="text-[11px] text-stone-600 mb-2">
-                  Les données sont sauvegardées localement. Vous pouvez relier votre projet Supabase en ligne directement ci-dessous.
-                </p>
-                {!showSupabaseForm ? (
-                  <button
-                    onClick={() => setShowSupabaseForm(true)}
-                    className="text-xs font-semibold text-emerald-700 hover:underline"
-                  >
-                    + Lier mon projet Supabase (URL & Clé publique)
-                  </button>
-                ) : (
-                  <form onSubmit={handleSaveSupabaseConfig} className="space-y-2 pt-2 border-t border-stone-200">
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-600 uppercase mb-0.5">
-                        Supabase Project URL
-                      </label>
-                      <input
-                        type="url"
-                        required
-                        value={supabaseInputUrl}
-                        onChange={(e) => setSupabaseInputUrl(e.target.value)}
-                        placeholder="https://xxxxxx.supabase.co"
-                        className="w-full bg-white border border-stone-300 rounded-lg p-2 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-600 uppercase mb-0.5">
-                        Supabase Anon / Publishable Key
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={supabaseInputKey}
-                        onChange={(e) => setSupabaseInputKey(e.target.value)}
-                        placeholder="sb_publishable_... ou eyJhbGciOi..."
-                        className="w-full bg-white border border-stone-300 rounded-lg p-2 text-xs font-mono"
-                      />
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="submit"
-                        className="px-3 py-1.5 rounded-lg bg-[#15803d] text-white text-xs font-bold hover:bg-[#166534]"
-                      >
-                        Enregistrer & Connecter
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowSupabaseForm(false)}
-                        className="px-3 py-1.5 rounded-lg border border-stone-300 text-stone-600 text-xs"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            )}
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs transition shadow-xs cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Se déconnecter</span>
+            </button>
           </div>
         </div>
       ) : (
